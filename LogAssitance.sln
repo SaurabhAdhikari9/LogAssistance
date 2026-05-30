@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogAssitance", "LogAssitance\LogAssitance.csproj", "{A720DEA1-F6BE-4C65-971A-6A8661ADF904}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogAssistance.WebApp", "LogAssistance.WebApp\LogAssistance.WebApp.csproj", "{DE7C4693-F110-4F34-B3F3-EEF422AD865E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A720DEA1-F6BE-4C65-971A-6A8661ADF904}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A720DEA1-F6BE-4C65-971A-6A8661ADF904}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A720DEA1-F6BE-4C65-971A-6A8661ADF904}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A720DEA1-F6BE-4C65-971A-6A8661ADF904}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DE7C4693-F110-4F34-B3F3-EEF422AD865E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DE7C4693-F110-4F34-B3F3-EEF422AD865E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DE7C4693-F110-4F34-B3F3-EEF422AD865E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DE7C4693-F110-4F34-B3F3-EEF422AD865E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
