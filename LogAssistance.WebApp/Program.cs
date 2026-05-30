@@ -1,4 +1,6 @@
 using LogAssistance.WebApp.Components;
+using LogAssistance.WebApp.Services.Assistance;
+using LogAssistance.WebApp.Services.LogTool;
 using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -6,16 +8,18 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
-// builder.Host.UseSerilog((context, configuration) =>
-//     configuration.ReadFrom.Configuration(context.Configuration));
-
+builder.Services.AddHttpClient();
 builder.Services.AddSerilog((services, config) =>
-    config.ReadFrom.Configuration(builder.Configuration));
+    config.ReadFrom.Configuration(builder.Configuration)
+    );
+builder.Services.AddHttpClient<IAssistanceService, AssistanceService>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["AIAssistnace:OllamaBaseUrl"]);
+});
 
+builder.Services.AddScoped<ILogService, LogService>();
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);

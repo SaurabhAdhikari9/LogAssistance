@@ -6,6 +6,7 @@
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
         <UserSecretsId>502c5987-11df-4fc8-ae83-21af2b8596d2</UserSecretsId>
+        <RootNamespace>LogAssitance</RootNamespace>
     </PropertyGroup>
 
 </Project>

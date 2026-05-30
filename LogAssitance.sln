@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogAssitance", "LogAssitance\LogAssitance.csproj", "{A720DEA1-F6BE-4C65-971A-6A8661ADF904}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogAssistance", "LogAssistance\LogAssistance.csproj", "{A720DEA1-F6BE-4C65-971A-6A8661ADF904}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LogAssistance.WebApp", "LogAssistance.WebApp\LogAssistance.WebApp.csproj", "{DE7C4693-F110-4F34-B3F3-EEF422AD865E}"
 EndProject

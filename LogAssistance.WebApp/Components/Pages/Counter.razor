@@ -15,9 +15,17 @@
 
     private void IncrementCount()
     {
-        int incremented = currentCount++;
-        _logger.LogInformation("Increment called and incremented from {currentCount} to {incremented}", currentCount, incremented);
-        currentCount = incremented;
+        try
+        {
+            int incremented = currentCount + 1;
+            _logger.LogInformation($"Increment called and incremented from {currentCount} to {incremented}", currentCount, incremented);
+            currentCount++;
+            throw new Exception($"Invalid user id: {currentCount}");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e.Message);
+        }
     }
 
 }
