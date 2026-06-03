@@ -1,161 +1,886 @@
 @page "/chat"
+@layout ChatLayout
 @rendermode InteractiveServer
 @using LogAssistance.WebApp.Services.Assistance
 @using Markdig
 @inject HttpClient Http
 @inject IAssistanceService assistanceService
+@inject IJSRuntime JS
 
 <PageTitle>AI Log Assistant</PageTitle>
 
-<div class="chat-container card shadow-sm">
-    <div class="card-header bg-dark text-white">
-        <h5 class="mb-0">🧠 Local AI Log Assistant</h5>
-        <small class="text-light">Powered by llama 3.2 / Serilog</small>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+<div class="chat-container">
+    <div class="chat-header">
+        <div class="header-left">
+            <div class="header-icon-wrapper">
+                <span class="header-icon">🧠</span>
+                <span class="pulse-indicator"></span>
+            </div>
+            <div>
+                <h5 class="header-title">Hero - Diagnostics Engine</h5>
+                <div class="header-meta">
+                    <span class="status-badge"><span class="status-pulse"></span>Active</span>
+                    <span class="meta-dot">•</span>
+                    <span class="meta-model">Llama 3.2</span>
+                    <span class="meta-dot">•</span>
+                    <span class="meta-context">Serilog Feed</span>
+                </div>
+            </div>
+        </div>
+        <div class="header-actions">
+            @if (ChatMessages.Any())
+            {
+                <button class="action-btn" @onclick="ClearChat" title="Clear Chat History">
+                    <i class="bi bi-trash3-fill"></i> Clear History
+                </button>
+            }
+        </div>
     </div>
 
-    <div class="card-body chat-history" id="chat-history-scroll">
+    <div class="chat-history" id="chatHistoryScroll">
         @if (!ChatMessages.Any())
         {
-            <div class="text-center text-muted mt-5">
-                <p>Ask me anything about your application logs!</p>
-                <small>Try: "Show me the latest 500 errors" or "Who logged in today?"</small>
+            <div class="empty-state">
+                <div class="empty-glow-ring">
+                    <div class="empty-icon">📊</div>
+                </div>
+                <h4 class="empty-title">Log Diagnostics Console</h4>
+                <p class="empty-description text-muted">Interact with Saurabh, your local AI engineering expert, to query, isolate, and debug system logs in real time.</p>
+                
+                <div class="suggestion-section">
+                    <div class="suggestion-header">
+                        <i class="bi bi-lightning-charge-fill text-warning"></i>
+                        <span>Quick Diagnostics Prompts</span>
+                    </div>
+                    
+                    <div class="suggestion-groups">
+                        <div class="suggestion-group-card">
+                            <div class="group-title"><i class="bi bi-clock-history"></i> Time-Based Queries</div>
+                            <div class="group-chips">
+                                <span class="chip" @onclick='() => SetInput("Show me the last 15 minutes of logs")'>Last 15 minutes</span>
+                                <span class="chip" @onclick='() => SetInput("Are there any logs in the last 1 hour?")'>Last 1 hour</span>
+                            </div>
+                        </div>
+                        
+                        <div class="suggestion-group-card">
+                            <div class="group-title"><i class="bi bi-exclamation-triangle-fill text-danger"></i> Failure Analysis</div>
+                            <div class="group-chips">
+                                <span class="chip chip-danger" @onclick='() => SetInput("Are there any Error level logs today?")'>Find Errors</span>
+                                <span class="chip chip-warning" @onclick='() => SetInput("Show database connection warning events")'>DB Warnings</span>
+                            </div>
+                        </div>
+                        
+                        <div class="suggestion-group-card">
+                            <div class="group-title"><i class="bi bi-shield-lock-fill text-info"></i> Security & Health</div>
+                            <div class="group-chips">
+                                <span class="chip" @onclick='() => SetInput("Who logged in recently?")'>Recent Logins</span>
+                                <span class="chip" @onclick='() => SetInput("Check server startup status logs")'>Startup Status</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         }
 
         @foreach (var message in ChatMessages)
         {
-            <div class="d-flex w-100 mb-4 @(message.Role == "User" ? "justify-content-end" : "justify-content-start")">
-                <div class="chat-bubble @(message.Role == "User" ? "user-bubble" : "ai-bubble") shadow-sm">
-                    <strong>@(message.Role == "User" ? "You" : "Hero")</strong>
-            
-                    <div class="mt-2 ai-content">
-                        @if (message.Role == "User")
-                        {
-                            @message.Content
-                        }
-                        else
-                        {
-                            @((MarkupString)Markdown.ToHtml(message.Content ?? ""))
-                        }
-                    </div>
+            <div class="message-wrapper @(message.Role == "User" ? "user-wrapper" : "ai-wrapper")">
+                @if (message.Role != "User")
+                {
+                    <div class="avatar ai-avatar">H</div>
+                }
+                else
+                {
+                    <div class="avatar user-avatar">U</div>
+                }
+                
+                <div class="chat-bubble @(message.Role == "User" ? "user-bubble" : "ai-bubble")">
+                    @if (message.Role == "User")
+                    {
+                        <div class="user-message-text">@message.Content</div>
+                    }
+                    else
+                    {
+                        <div class="markdown-content">
+                            @((MarkupString)FormatAiResponse(message.Content ?? ""))
+                        </div>
+                        <div class="bubble-actions">
+                            <button class="bubble-action-btn" @onclick='() => CopyToClipboard(message.Content ?? "")' title="Copy message to clipboard">
+                                <i class="bi bi-clipboard"></i> Copy
+                            </button>
+                        </div>
+                    }
                 </div>
             </div>
         }
 
         @if (IsProcessing)
         {
-            <div class="d-flex w-100 mb-3 justify-content-start">
-                <div class="chat-bubble ai-bubble shadow-sm text-muted">
-                    <em>Thinking... (Querying Logs)</em>
+            <div class="message-wrapper ai-wrapper">
+                <div class="avatar ai-avatar pulse-anim">H</div>
+                <div class="chat-bubble ai-bubble typing-indicator-bubble">
+                    <div class="typing-indicator">
+                        <span></span><span></span><span></span>
+                    </div>
                 </div>
             </div>
         }
     </div>
 
-    <div class="card-footer bg-light">
-        <div class="input-group">
-            <input type="text" 
-                   class="form-control" 
-                   placeholder="Type your log query here..." 
+    <div class="chat-input-area">
+        <div class="chat-input-wrapper">
+            <div class="input-decorations">
+                <i class="bi bi-terminal-fill text-muted me-2" title="AI Terminal Mode"></i>
+            </div>
+            
+            <input @ref="inputElement"
+                   type="text" 
+                   class="chat-input" 
+                   placeholder="Ask Saurabh a question about the logs (e.g. Find errors)..." 
                    @bind="CurrentInput" 
                    @bind:event="oninput" 
                    @onkeyup="HandleKeyUp" 
                    disabled="@IsProcessing" />
                    
-            <button class="btn btn-primary px-4" 
+            <button class="send-btn" 
                     @onclick="SendMessageAsync" 
                     disabled="@(string.IsNullOrWhiteSpace(CurrentInput) || IsProcessing)">
-                Send
+                <span>Send</span>
+                <i class="bi bi-send-fill"></i>
             </button>
         </div>
     </div>
 </div>
 
 <style>
-    /* Scoped CSS to make the chat look professional */
-    .chat-container {
-        max-width: 800px;
-        margin: 0 auto;
-        height: 75vh;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .chat-history {
-        overflow-y: auto;
-        background-color: #f8f9fa;
-        flex-grow: 1;
+    /* Premium Obsidian / Slate Theme variables */
+    :root {
+        --slate-950: #020617;
+        --slate-900: #0f172a;
+        --slate-800: #1e293b;
+        --slate-700: #334155;
+        --slate-600: #475569;
+        --slate-400: #94a3b8;
+        --slate-300: #cbd5e1;
+        --slate-100: #f1f5f9;
+        --indigo-500: #6366f1;
+        --indigo-600: #4f46e5;
+        --blue-500: #3b82f6;
     }
 
-    .chat-bubble {
-        max-width: 75%;
-        padding: 12px 16px;
+
+    /* Global Container styled as full-screen interface */
+    .chat-container {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        max-width: 100% !important;
+        margin: 0 !important;
+        height: 100% !important;
+        flex-grow: 1;
+        display: flex;
+        flex-direction: column;
+        background-color: var(--slate-900);
+        border-radius: 0 !important;
+        box-shadow: none;
+        overflow: hidden;
+        border: none !important;
+        position: relative;
+    }
+
+    /* Header */
+    .chat-header {
+        background-color: rgba(30, 41, 59, 0.85);
+        backdrop-filter: blur(12px);
+        padding: 1rem 2rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        z-index: 10;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    }
+
+    .header-left {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
+
+    .header-icon-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .header-icon {
+        font-size: 1.8rem;
+        background: rgba(255, 255, 255, 0.04);
+        padding: 8px;
+        border-radius: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    .pulse-indicator {
+        position: absolute;
+        bottom: -2px;
+        right: -2px;
+        width: 12px;
+        height: 12px;
+        background-color: #10b981;
+        border-radius: 50%;
+        border: 2px solid var(--slate-900);
+    }
+
+    .header-title {
+        color: var(--slate-100);
+        margin: 0;
+        font-weight: 700;
+        font-size: 1.1rem;
+        letter-spacing: -0.01em;
+    }
+
+    .header-meta {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.75rem;
+        color: var(--slate-400);
+        margin-top: 2px;
+    }
+
+    .status-badge {
+        display: flex;
+        align-items: center;
+        color: #10b981;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.1);
+        padding: 1px 6px;
+        border-radius: 6px;
+    }
+
+    .status-pulse {
+        width: 6px;
+        height: 6px;
+        background-color: #10b981;
+        border-radius: 50%;
+        margin-right: 4px;
+        display: inline-block;
+        animation: pulse-green 2s infinite;
+    }
+
+    .meta-dot {
+        color: var(--slate-600);
+    }
+
+    .meta-model, .meta-context {
+        background: rgba(255, 255, 255, 0.04);
+        padding: 1px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.02);
+    }
+
+    .header-actions {
+        display: flex;
+        align-items: center;
+    }
+
+    .action-btn {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: var(--slate-400);
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 8px 14px;
         border-radius: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        cursor: pointer;
+    }
+
+    .action-btn:hover {
+        background: rgba(239, 68, 68, 0.1);
+        border-color: rgba(239, 68, 68, 0.25);
+        color: #f87171;
+        transform: translateY(-1px);
+    }
+
+    .action-btn:active {
+        transform: translateY(0);
+    }
+
+    /* History Area */
+    .chat-history {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 2.5rem 3rem;
+        display: flex;
+        flex-direction: column;
+        gap: 2rem;
+        scroll-behavior: smooth;
+        background: radial-gradient(circle at top right, rgba(30, 41, 59, 0.25) 0%, rgba(15, 23, 42, 0) 70%);
+    }
+
+    /* Scrollbars */
+    .chat-history::-webkit-scrollbar {
+        width: 6px;
+    }
+    .chat-history::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .chat-history::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 10px;
+    }
+    .chat-history::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Empty State Dashboard */
+    .empty-state {
+        margin: auto;
+        text-align: center;
+        max-width: 840px;
+        padding: 2rem 1.5rem;
+    }
+    
+    .empty-glow-ring {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 88px;
+        height: 88px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(217, 70, 239, 0.1) 100%);
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        box-shadow: 0 0 35px rgba(99, 102, 241, 0.15);
+        margin-bottom: 1.8rem;
+        animation: breath 4s infinite ease-in-out;
+    }
+
+    @@keyframes breath {
+        0%, 100% { transform: scale(1); box-shadow: 0 0 30px rgba(99, 102, 241, 0.15); }
+        50% { transform: scale(1.05); box-shadow: 0 0 45px rgba(217, 70, 239, 0.25); }
+    }
+
+    .empty-icon {
+        font-size: 2.8rem;
+    }
+
+    .empty-title {
+        color: var(--slate-100);
+        font-weight: 800;
+        font-size: 1.8rem;
+        letter-spacing: -0.02em;
+        margin-bottom: 0.8rem;
+    }
+
+    .empty-description {
+        color: var(--slate-400) !important;
+        font-size: 1rem;
+        line-height: 1.6;
+        max-width: 580px;
+        margin: 0 auto 2.5rem auto;
+    }
+
+    /* Suggestion Section */
+    .suggestion-section {
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 20px;
+        padding: 2rem;
+        text-align: left;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.15);
+    }
+
+    .suggestion-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--slate-100);
+        font-weight: 700;
+        font-size: 0.9rem;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        margin-bottom: 1.4rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        padding-bottom: 8px;
+    }
+
+    .suggestion-groups {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 1.2rem;
+    }
+
+    .suggestion-group-card {
+        background: rgba(15, 23, 42, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+        border-radius: 14px;
+        padding: 1.2rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .suggestion-group-card:hover {
+        background: rgba(15, 23, 42, 0.7);
+        border-color: rgba(99, 102, 241, 0.15);
+        transform: translateY(-2px);
+    }
+
+    .group-title {
+        color: var(--slate-300);
+        font-size: 0.85rem;
+        font-weight: 700;
+        margin-bottom: 0.8rem;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .group-chips {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .chip {
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        color: var(--slate-300);
+        padding: 10px 14px;
+        border-radius: 10px;
+        font-size: 0.82rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        text-align: left;
+    }
+
+    .chip:hover {
+        background: var(--indigo-600);
+        color: white;
+        border-color: var(--indigo-500);
+        transform: translateX(3px);
+        box-shadow: 0 4px 10px rgba(79, 70, 229, 0.25);
+    }
+
+    .chip-danger:hover {
+        background: #ef4444;
+        border-color: #f87171;
+        box-shadow: 0 4px 10px rgba(239, 68, 68, 0.25);
+    }
+
+    .chip-warning:hover {
+        background: #f59e0b;
+        border-color: #fbbf24;
+        box-shadow: 0 4px 10px rgba(245, 158, 11, 0.25);
+    }
+
+    /* Message Wrappers */
+    .message-wrapper {
+        display: flex;
+        width: 100%;
+        gap: 16px;
+        align-items: flex-end;
+    }
+
+    .user-wrapper {
+        flex-direction: row-reverse;
+    }
+
+    .ai-wrapper {
+        justify-content: flex-start;
+    }
+
+    /* Avatars */
+    .avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 800;
+        font-size: 0.85rem;
+        flex-shrink: 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    }
+
+    .ai-avatar {
+        background: linear-gradient(135deg, var(--indigo-500) 0%, #d946ef 100%);
+        color: white;
+        margin-bottom: 2px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .user-avatar {
+        background: linear-gradient(135deg, #0284c7 0%, var(--blue-500) 100%);
+        color: white;
+        margin-bottom: 2px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    /* Bubbles */
+    .chat-bubble {
+        padding: 16px 22px;
+        border-radius: 20px;
         font-size: 0.95rem;
+        line-height: 1.6;
+        max-width: 85%;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        transition: all 0.3s ease;
+        position: relative;
     }
 
     .user-bubble {
-        background-color: #0d6efd;
+        background: linear-gradient(135deg, var(--indigo-600) 0%, var(--blue-500) 100%);
         color: white;
-        border-bottom-right-radius: 2px;
+        border-bottom-right-radius: 4px;
+        font-weight: 500;
+    }
+
+    .user-message-text {
+        white-space: pre-wrap;
     }
 
     .ai-bubble {
-        background-color: white;
-        color: #212529;
-        border: 1px solid #dee2e6;
-        border-bottom-left-radius: 2px;
-    }
-    /* Target the markdown content inside the AI bubble */
-    .ai-content {
-        font-size: 0.95rem;
-        line-height: 1.5;
+        background-color: rgba(30, 41, 59, 0.65);
+        color: var(--slate-100);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom-left-radius: 4px;
+        overflow-x: hidden;
     }
 
-    /* Style the Markdown Tables automatically */
-    .ai-content table {
-        width: 100%;
-        margin-top: 15px;
-        margin-bottom: 15px;
-        border-collapse: collapse;
-        background-color: #ffffff;
-        border-radius: 8px;
-        overflow: hidden;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    /* Bubble Actions (Clipboard Copy) */
+    .bubble-actions {
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 10px;
+        border-top: 1px solid rgba(255, 255, 255, 0.05);
+        padding-top: 8px;
     }
 
-    .ai-content th {
-        background-color: #f8f9fa;
-        color: #495057;
+    .bubble-action-btn {
+        background: transparent;
+        border: none;
+        color: var(--slate-400);
+        font-size: 0.78rem;
         font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        cursor: pointer;
+        padding: 4px 8px;
+        border-radius: 6px;
+        transition: all 0.2s;
+    }
+
+    .bubble-action-btn:hover {
+        color: var(--slate-100);
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .bubble-action-btn:active {
+        transform: scale(0.96);
+    }
+
+    /* Typing Indicator */
+    .typing-indicator-bubble {
+        background-color: rgba(30, 41, 59, 0.65);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-bottom-left-radius: 4px;
+        width: fit-content;
+        padding: 14px 24px;
+    }
+
+    .typing-indicator {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        height: 12px;
+    }
+
+    .typing-indicator span {
+        width: 8px;
+        height: 8px;
+        background-color: var(--slate-400);
+        border-radius: 50%;
+        animation: typing 1.4s infinite ease-in-out both;
+        opacity: 0.6;
+    }
+
+    .typing-indicator span:nth-child(1) { animation-delay: -0.32s; }
+    .typing-indicator span:nth-child(2) { animation-delay: -0.16s; }
+
+    @@keyframes typing {
+        0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+        40% { transform: scale(1.1); opacity: 1; background-color: var(--indigo-500); }
+    }
+
+    .pulse-anim {
+        animation: pulse-avatar 2s infinite;
+    }
+
+    @@keyframes pulse-avatar {
+        0% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5); }
+        70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(99, 102, 241, 0); }
+        100% { transform: scale(0.98); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
+    }
+
+    @@keyframes pulse-green {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    @@keyframes pulse-red {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(236, 72, 153, 0.7); }
+        70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(236, 72, 153, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(236, 72, 153, 0); }
+    }
+
+    /* Input Area */
+    .chat-input-area {
+        padding: 1.5rem 3rem 2rem 3rem;
+        background-color: var(--slate-900);
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .chat-input-wrapper {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 9999px;
+        padding: 6px 8px 6px 20px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+
+    .chat-input-wrapper:focus-within {
+        border-color: var(--indigo-500);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15), 0 4px 25px rgba(0,0,0,0.35);
+        background: rgba(30, 41, 59, 0.85);
+    }
+
+    .chat-input {
+        flex: 1;
+        background: transparent !important;
+        border: none !important;
+        color: var(--slate-100) !important;
+        font-size: 0.98rem;
+        padding: 12px 0;
+        outline: none !important;
+        box-shadow: none !important;
+    }
+
+    .chat-input::placeholder {
+        color: var(--slate-400);
+        opacity: 0.7;
+    }
+
+    .send-btn {
+        background: linear-gradient(135deg, var(--indigo-600) 0%, var(--indigo-500) 100%) !important;
+        border: none !important;
+        color: white !important;
+        border-radius: 9999px !important;
+        padding: 11px 24px !important;
+        font-weight: 600;
+        font-size: 0.92rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+    }
+
+    .send-btn:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px rgba(79, 70, 229, 0.45);
+        filter: brightness(1.1);
+    }
+
+    .send-btn:hover .bi-send-fill {
+        transform: translate(2px, -2px);
+    }
+
+    .send-btn .bi-send-fill {
+        transition: transform 0.2s ease;
+        font-size: 0.9rem;
+    }
+
+    .send-btn:active {
+        transform: translateY(0);
+    }
+
+    .send-btn:disabled {
+        background: rgba(255, 255, 255, 0.04) !important;
+        color: var(--slate-600) !important;
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    /* --- MARKDOWN STYLING INSIDE BUBBLES --- */
+    .markdown-content p:last-child {
+        margin-bottom: 0;
+    }
+    
+    .markdown-content p {
+        margin-bottom: 0.8rem;
+    }
+
+    /* Tables styled as Premium Terminal Log Widgets */
+    .markdown-content table {
+        width: 100%;
+        margin: 1.2rem 0;
+        border-collapse: collapse;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        background-color: var(--slate-950);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .markdown-content th {
+        background-color: rgba(30, 41, 59, 0.9);
+        color: var(--slate-300);
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-weight: 700;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
         text-align: left;
-        padding: 12px 15px;
-        border-bottom: 2px solid #dee2e6;
+        padding: 12px 16px;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.06);
     }
 
-    .ai-content td {
-        padding: 10px 15px;
-        border-bottom: 1px solid #dee2e6;
-        color: #212529;
-        vertical-align: top;
-        /* Prevents long log messages from breaking the table layout */
+    .markdown-content td {
+        padding: 10px 16px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+        vertical-align: middle;
+        font-size: 0.85rem;
         word-break: break-word;
-        white-space: normal;
+        color: var(--slate-300);
     }
 
-    /* Add a subtle hover effect to log rows */
-    .ai-content tr:hover td {
-        background-color: #f1f3f5;
+    .markdown-content tr:last-child td {
+        border-bottom: none;
     }
 
-    /* Ensure the chat bubble itself can stretch to fit the table */
-    .ai-bubble {
-        background-color: white;
-        color: #212529;
-        border: 1px solid #dee2e6;
-        border-bottom-left-radius: 2px;
-        max-width: 85%; /* Widened slightly so tables have room to breathe */
-        overflow-x: auto; /* Adds a scrollbar if the table is too wide for mobile */
+    .markdown-content tr:hover td {
+        background-color: rgba(255, 255, 255, 0.02);
+        color: white;
+    }
+
+    /* Target specific columns for logs */
+    .markdown-content td:nth-child(1) {
+        /* Timestamp */
+        color: var(--slate-400);
+        font-size: 0.8rem;
+        white-space: nowrap;
+    }
+
+    .markdown-content td:nth-child(3) {
+        /* Message */
+        font-weight: 500;
+    }
+
+    /* Log badge pill designs */
+    .log-badge {
+        display: inline-flex;
+        align-items: center;
+        font-weight: 700;
+        font-size: 0.7rem;
+        padding: 2px 8px;
+        border-radius: 9999px;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid transparent;
+    }
+    
+    .badge-error {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #f87171;
+        border-color: rgba(239, 68, 68, 0.3);
+        box-shadow: 0 0 10px rgba(239, 68, 68, 0.1);
+    }
+    
+    .badge-warning {
+        background-color: rgba(245, 158, 11, 0.15);
+        color: #fbbf24;
+        border-color: rgba(245, 158, 11, 0.3);
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.1);
+    }
+    
+    .badge-info {
+        background-color: rgba(59, 130, 246, 0.15);
+        color: #60a5fa;
+        border-color: rgba(59, 130, 246, 0.3);
+        box-shadow: 0 0 10px rgba(59, 130, 246, 0.1);
+    }
+    
+    .badge-debug {
+        background-color: rgba(168, 85, 247, 0.15);
+        color: #c084fc;
+        border-color: rgba(168, 85, 247, 0.3);
+        box-shadow: 0 0 10px rgba(168, 85, 247, 0.1);
+    }
+    
+    .badge-verbose {
+        background-color: rgba(107, 114, 128, 0.15);
+        color: #9ca3af;
+        border-color: rgba(107, 114, 128, 0.3);
+    }
+    
+    .badge-fatal {
+        background-color: rgba(236, 72, 153, 0.15);
+        color: #f472b6;
+        border-color: rgba(236, 72, 153, 0.3);
+        box-shadow: 0 0 12px rgba(236, 72, 153, 0.2);
+        animation: pulse-red 2s infinite;
+    }
+
+    /* Code Blocks */
+    .markdown-content pre {
+        background-color: var(--slate-950) !important;
+        color: var(--slate-100);
+        padding: 16px;
+        border-radius: 12px;
+        overflow-x: auto;
+        margin: 1.2rem 0;
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+    }
+    
+    .markdown-content code {
+        background-color: rgba(255, 255, 255, 0.08);
+        color: #f43f5e;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85em;
+        border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    
+    .markdown-content pre code {
+        background-color: transparent !important;
+        color: inherit;
+        padding: 0;
+        font-family: 'JetBrains Mono', monospace !important;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        border: none;
     }
 </style>
 
@@ -164,9 +889,17 @@
     private bool IsProcessing { get; set; } = false;
     private List<ChatMessage> ChatMessages { get; set; } = new();
     private string AssistantName;
+    private ElementReference inputElement;
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollToBottom();
+            await FocusInput();
+        }
+    }
 
-    
     private async Task HandleKeyUp(KeyboardEventArgs e)
     {
         if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(CurrentInput) && !IsProcessing)
@@ -175,19 +908,110 @@
         }
     }
 
+    private void SetInput(string text)
+    {
+        CurrentInput = text;
+    }
+
+    private void ClearChat()
+    {
+        ChatMessages.Clear();
+        StateHasChanged();
+    }
+
+    private async Task FocusInput()
+    {
+        try
+        {
+            await inputElement.FocusAsync();
+        }
+        catch { }
+    }
+
+    private async Task CopyToClipboard(string text)
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", text);
+        }
+        catch { }
+    }
+
+    private string FormatAiResponse(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+        
+        var html = Markdown.ToHtml(content);
+        
+        // C# Post-processing helper to render glowing badges for standard Log Levels in markdown tables
+        html = html.Replace("<td>Error</td>", "<td><span class=\"log-badge badge-error\">Error</span></td>")
+                   .Replace("<td>ERR</td>", "<td><span class=\"log-badge badge-error\">ERR</span></td>")
+                   .Replace("<td>ERROR</td>", "<td><span class=\"log-badge badge-error\">ERROR</span></td>")
+                   
+                   .Replace("<td>Warning</td>", "<td><span class=\"log-badge badge-warning\">Warning</span></td>")
+                   .Replace("<td>WARN</td>", "<td><span class=\"log-badge badge-warning\">WARN</span></td>")
+                   .Replace("<td>WARNING</td>", "<td><span class=\"log-badge badge-warning\">WARNING</span></td>")
+                   
+                   .Replace("<td>Information</td>", "<td><span class=\"log-badge badge-info\">Information</span></td>")
+                   .Replace("<td>INFO</td>", "<td><span class=\"log-badge badge-info\">INFO</span></td>")
+                   .Replace("<td>INF</td>", "<td><span class=\"log-badge badge-info\">INF</span></td>")
+                   .Replace("<td>INFORMATION</td>", "<td><span class=\"log-badge badge-info\">INFORMATION</span></td>")
+                   
+                   .Replace("<td>Debug</td>", "<td><span class=\"log-badge badge-debug\">Debug</span></td>")
+                   .Replace("<td>DBG</td>", "<td><span class=\"log-badge badge-debug\">DBG</span></td>")
+                   .Replace("<td>DEBUG</td>", "<td><span class=\"log-badge badge-debug\">DEBUG</span></td>")
+                   
+                   .Replace("<td>Verbose</td>", "<td><span class=\"log-badge badge-verbose\">Verbose</span></td>")
+                   .Replace("<td>VRB</td>", "<td><span class=\"log-badge badge-verbose\">VRB</span></td>")
+                   .Replace("<td>VERBOSE</td>", "<td><span class=\"log-badge badge-verbose\">VERBOSE</span></td>")
+                   
+                   .Replace("<td>Fatal</td>", "<td><span class=\"log-badge badge-fatal\">Fatal</span></td>")
+                   .Replace("<td>FTL</td>", "<td><span class=\"log-badge badge-fatal\">FTL</span></td>")
+                   .Replace("<td>FATAL</td>", "<td><span class=\"log-badge badge-fatal\">FATAL</span></td>");
+
+        return html;
+    }
+
     private async Task SendMessageAsync()
     {
         var userText = CurrentInput.Trim();
         ChatMessages.Add(new ChatMessage { Role = "User", Content = userText });
         CurrentInput = string.Empty; 
         IsProcessing = true;
+        
         StateHasChanged();
+        await ScrollToBottom();
+        await FocusInput();
 
         var requestPayload = new OllamaRequestDto(userText);
         AssistantName = requestPayload.AssistantName;
+        
         var aiText = await assistanceService.SendMessageAsync(requestPayload);
         
         ChatMessages.Add(new ChatMessage { Role = "AI", Content = aiText });
         IsProcessing = false;
+        
+        StateHasChanged();
+        await ScrollToBottom();
+        await FocusInput();
+    }
+
+    private async Task ScrollToBottom()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                setTimeout(function() {
+                    var objDiv = document.getElementById('chatHistoryScroll');
+                    if (objDiv) {
+                        objDiv.scrollTo({
+                            top: objDiv.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }
+                }, 100);
+            ");
+        }
+        catch { /* Ignore errors during prerendering */ }
     }
 }

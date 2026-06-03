@@ -16,7 +16,7 @@ public class LogService : ILogService
 
         // 2. Locate today's active log file based on Serilog's default naming (app-yyyyMMdd.json)
         string todaySuffix = DateTime.Now.ToString("yyyyMMdd");
-        string filePath = Path.Combine(_logDirectory, $"app-{todaySuffix}.json");
+        string filePath = Path.Combine(_logDirectory, $"log-{todaySuffix}.json");
 
         if (!File.Exists(filePath))
         {

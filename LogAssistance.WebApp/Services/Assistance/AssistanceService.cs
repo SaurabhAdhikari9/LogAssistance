@@ -44,7 +44,7 @@ public class AssistanceService(HttpClient httpClient, ILogService _logService) :
         {
             if (arguments.TryGetProperty("minutesAgo", out var minutesObj) && minutesObj.TryGetInt32(out int minutes))
             {
-                var logs = (await _logService.GetRecentLogsAsync(minutes)).Take(10).ToList();
+                var logs = (await _logService.GetRecentLogsAsync(minutes)).ToList();
                 return JsonSerializer.Serialize(logs, _jsonOptions);
             }
             return "Error: Invalid or missing 'minutesAgo' argument.";
